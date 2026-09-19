@@ -1120,6 +1120,8 @@ IA_ERRORCODE ia_mpegh_dec_execute(pVOID p_ia_mpegh_dec_obj, pVOID pv_input, pVOI
     pstr_output_config->hoa_md_payload_length =
         p_obj_mpegh_dec->mpeghd_config.hoa_md_payload_length;
     pstr_output_config->pcm_payload_length = p_obj_mpegh_dec->mpeghd_config.pcm_data_length;
+    pstr_output_config->oam_sample_offset = p_obj_mpegh_dec->mpeghd_config.obj_offset;
+    pstr_output_config->hoa_sample_offset = p_obj_mpegh_dec->mpeghd_config.hoa_offset;
     pstr_output_config->pcm_bit_depth = 24;
     pstr_output_config->ext_pcm_sample_rate =
         p_obj_mpegh_dec->mpeghd_config.ext_pcm_sample_rate;
@@ -1133,6 +1135,33 @@ IA_ERRORCODE ia_mpegh_dec_execute(pVOID p_ia_mpegh_dec_obj, pVOID pv_input, pVOI
         p_obj_mpegh_dec->mpeghd_config.ext_num_objects;
     pstr_output_config->ext_num_hoa_transport_channels =
         p_obj_mpegh_dec->mpeghd_config.ext_num_hoa_transport_channels;
+
+    {
+      WORD32 obj;
+      ia_dec_data_struct *pstr_dec_data =
+          (ia_dec_data_struct *)p_obj_mpegh_dec->p_state_mpeghd->pstr_dec_data;
+      ia_oam_dec_state_struct *oam =
+          &pstr_dec_data->str_obj_ren_dec_state.str_obj_md_dec_state;
+      WORD32 num_obj = pstr_output_config->ext_num_objects;
+      if (num_obj > 24)
+        num_obj = 24;
+
+      pstr_output_config->obj_metadata_valid =
+          (num_obj > 0 && oam->num_objects > 0) ? 1 : 0;
+      pstr_output_config->obj_position_fixed =
+          (oam->azimuth_fixed && oam->elevation_fixed && oam->radius_fixed) ? 1 : 0;
+
+      for (obj = 0; obj < num_obj; obj++)
+      {
+        pstr_output_config->obj_azimuth[obj] = oam->azimuth_descaled[obj];
+        pstr_output_config->obj_elevation[obj] = oam->elevation_descaled[obj];
+        pstr_output_config->obj_radius[obj] = oam->radius_descaled[obj];
+        pstr_output_config->obj_gain[obj] = oam->gain_descaled[obj];
+        pstr_output_config->obj_spread_width[obj] = oam->spread_width_descaled[obj];
+        pstr_output_config->obj_spread_height[obj] = oam->spread_height_descaled[obj];
+        pstr_output_config->obj_spread_depth[obj] = oam->spread_depth_descaled[obj];
+      }
+    }
   }
   pstr_output_config->i_num_chan = p_obj_mpegh_dec->mpeghd_config.ui_n_channels;
   if (p_obj_mpegh_dec->mpeghd_config.ui_cicp_layout_idx == 0)

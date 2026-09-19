@@ -91,8 +91,31 @@ static VOID raw_write_manifest(impeghd_rawdump *d, const ia_output_config *cfg)
   fprintf(fp, "  \"transport\": {\n");
   fprintf(fp, "    \"channel_signals\": %d,\n", d->num_channels);
   fprintf(fp, "    \"objects\": %d,\n", d->num_objects);
-  fprintf(fp, "    \"hoa_transport_channels\": %d\n", d->num_hoa);
+  fprintf(fp, "    \"hoa_transport_channels\": %d,\n", d->num_hoa);
+  fprintf(fp, "    \"object_offset\": %d,\n", cfg->oam_sample_offset);
+  fprintf(fp, "    \"hoa_end_offset\": %d\n", cfg->hoa_sample_offset);
   fprintf(fp, "  },\n");
+  fprintf(fp, "  \"object_details\": [\n");
+  for (i = 0; i < d->num_objects; i++)
+  {
+    WORD32 transport_index = cfg->oam_sample_offset + i;
+    fprintf(fp,
+            "    {\"index\": %d, \"transport_index\": %d, "
+            "\"file\": \"objects/object_%02d.wav\", "
+            "\"metadata_valid\": %d, \"position_fixed\": %d, "
+            "\"azimuth\": %.6f, \"elevation\": %.6f, "
+            "\"radius\": %.6f, \"gain\": %.6f, "
+            "\"spread_width\": %.6f, \"spread_height\": %.6f, "
+            "\"spread_depth\": %.6f}%s\n",
+            i, transport_index, i,
+            cfg->obj_metadata_valid, cfg->obj_position_fixed,
+            cfg->obj_azimuth[i], cfg->obj_elevation[i],
+            cfg->obj_radius[i], cfg->obj_gain[i],
+            cfg->obj_spread_width[i], cfg->obj_spread_height[i],
+            cfg->obj_spread_depth[i],
+            (i + 1 < d->num_objects) ? "," : "");
+  }
+  fprintf(fp, "  ],\n");
   fprintf(fp, "  \"rendered_sample_rate\": %d,\n", d->rendered_sample_rate);
   fprintf(fp, "  \"rendered_bit_depth\": %d,\n", d->rendered_bits);
   fprintf(fp, "  \"rendered_channels\": [\n");
@@ -193,39 +216,57 @@ IA_ERRORCODE impeghd_rawdump_write_transport(impeghd_rawdump *d,
   if (cfg->ext_pcm_frame_samples > 0 && samples > cfg->ext_pcm_frame_samples)
     samples = cfg->ext_pcm_frame_samples;
 
-  for (sample = 0; sample < samples; sample++)
   {
-    for (ch = 0; ch < total; ch++)
-    {
-      const UWORD8 *src = pcm + 3 * (sample * total + ch);
-      FILE *fp = NULL;
-      unsigned long *count = NULL;
+    WORD32 object_start = cfg->oam_sample_offset;
+    WORD32 hoa_start = cfg->hoa_sample_offset - d->num_hoa;
 
-      if (ch < d->num_channels)
+    /* Object and HOA blocks can appear in either order. Use the decoder's
+       offsets instead of assuming channels -> objects -> HOA. */
+    if (d->num_objects > 0 &&
+        (object_start < 0 || object_start + d->num_objects > total))
+      object_start = d->num_channels;
+
+    if (d->num_hoa > 0 &&
+        (hoa_start < 0 || hoa_start + d->num_hoa > total))
+    {
+      hoa_start = d->num_channels;
+      if (d->num_objects > 0 && hoa_start == object_start)
+        hoa_start += d->num_objects;
+    }
+
+    for (sample = 0; sample < samples; sample++)
+    {
+      for (ch = 0; ch < total; ch++)
       {
-        fp = d->channels[ch];
-        count = &d->channel_bytes[ch];
-      }
-      else if (ch < d->num_channels + d->num_objects)
-      {
-        WORD32 object_index = ch - d->num_channels;
-        fp = d->objects[object_index];
-        count = &d->object_bytes[object_index];
-      }
-      else
-      {
-        WORD32 hoa_index = ch - d->num_channels - d->num_objects;
-        if (hoa_index >= 0 && hoa_index < d->num_hoa)
+        const UWORD8 *src = pcm + 3 * (sample * total + ch);
+        FILE *fp = NULL;
+        unsigned long *count = NULL;
+
+        if (ch < d->num_channels)
         {
+          fp = d->channels[ch];
+          count = &d->channel_bytes[ch];
+        }
+        else if (d->num_objects > 0 &&
+                 ch >= object_start && ch < object_start + d->num_objects)
+        {
+          WORD32 object_index = ch - object_start;
+          fp = d->objects[object_index];
+          count = &d->object_bytes[object_index];
+        }
+        else if (d->num_hoa > 0 &&
+                 ch >= hoa_start && ch < hoa_start + d->num_hoa)
+        {
+          WORD32 hoa_index = ch - hoa_start;
           fp = d->hoa[hoa_index];
           count = &d->hoa_bytes[hoa_index];
         }
-      }
 
-      if (fp != NULL && count != NULL)
-      {
-        fwrite(src, 1, 3, fp);
-        *count += 3;
+        if (fp != NULL && count != NULL)
+        {
+          fwrite(src, 1, 3, fp);
+          *count += 3;
+        }
       }
     }
   }

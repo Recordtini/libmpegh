@@ -1,4 +1,4 @@
-name: Build Windows Raw Extractor
+name: Build Windows MPEG-H Scene Explorer
 
 on:
   workflow_dispatch:
@@ -9,6 +9,7 @@ on:
     paths:
       - "decoder/**"
       - "test/**"
+      - "tools/**"
       - "CMakeLists.txt"
       - ".github/workflows/raw-extractor-windows.yml"
 
@@ -22,34 +23,41 @@ jobs:
       - name: Configure x64 Release
         run: cmake -S . -B build-raw -A x64
 
-      - name: Build
+      - name: Build decoder backend
         run: cmake --build build-raw --config Release --target ia_mpeghd_testbench
 
-      - name: Package drag-and-drop extractor
+      - name: Build GUI
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item "build-raw/Release/ia_mpeghd_testbench.exe" "dist/mpegh_raw_extract.exe"
+          python -m pip install --disable-pip-version-check pyinstaller
+          pyinstaller --noconfirm --clean --onefile --windowed --name "MPEGH Scene Explorer" "tools/mpegh_scene_explorer.py"
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item "dist/MPEGH Scene Explorer.exe" "package/MPEGH Scene Explorer.exe"
+          Copy-Item "build-raw/Release/ia_mpeghd_testbench.exe" "package/mpegh_backend.exe"
           @"
-          MPEG-H Raw Materials Extractor
+          MPEG-H Scene Explorer
 
-          Drag one or more MPEG-H .m4a/.mp4 files onto mpegh_raw_extract.exe.
+          Run "MPEGH Scene Explorer.exe", then open an MPEG-H M4A/MP4.
 
-          For each input, it creates:
-            <filename>_raw_materials/
-              channels/       decoded channel/bed signals before rendering
-              objects/        decoded object source signals before OAM rendering
-              hoa_transport/  decoded HOA transport channels
-              rendered/       final rendered/downmixed output, one WAV per speaker
-              rendered_mix.wav
-              manifest.json
+          The app decodes the file once into a temporary workspace and shows:
+          - raw audio objects
+          - channel/bed signals
+          - HOA transport signals
+          - rendered speaker outputs
+          - object position metadata when available
 
-          You can also run:
-            mpegh_raw_extract.exe "C:\path\file.m4a"
-          "@ | Set-Content -Encoding ASCII "dist/README.txt"
+          Objects are selected for export by default. You can preview a row and
+          check/uncheck exactly what you want to export.
 
-      - name: Upload Windows EXE
+          Keep mpegh_backend.exe beside the GUI EXE.
+          "@ | Set-Content -Encoding ASCII "package/README.txt"
+
+      - name: Upload Windows app
         uses: actions/upload-artifact@v4
         with:
-          name: mpegh-raw-extractor-windows-x64
-          path: dist/
+          name: mpegh-scene-explorer-windows-x64
+          path: package/

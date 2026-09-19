@@ -151,6 +151,17 @@ typedef struct
   WORD32 ext_num_objects;
   WORD32 ext_num_hoa_transport_channels;
 
+  /* First decoded OAM state, useful for inspection/UIs. */
+  WORD32 obj_metadata_valid;
+  WORD32 obj_position_fixed;
+  FLOAT32 obj_azimuth[24];
+  FLOAT32 obj_elevation[24];
+  FLOAT32 obj_radius[24];
+  FLOAT32 obj_gain[24];
+  FLOAT32 obj_spread_width[24];
+  FLOAT32 obj_spread_height[24];
+  FLOAT32 obj_spread_depth[24];
+
   WORD32 num_speakers;
   WORD32 spk_layout;
   WORD32 cicp_index;
