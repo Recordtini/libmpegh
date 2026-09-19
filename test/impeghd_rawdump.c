@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -103,12 +104,14 @@ static VOID raw_write_manifest(impeghd_rawdump *d, const ia_output_config *cfg)
             "    {\"index\": %d, \"transport_index\": %d, "
             "\"file\": \"objects/object_%02d.wav\", "
             "\"metadata_valid\": %d, \"position_fixed\": %d, "
+            "\"movement\": %d, "
             "\"azimuth\": %.6f, \"elevation\": %.6f, "
             "\"radius\": %.6f, \"gain\": %.6f, "
             "\"spread_width\": %.6f, \"spread_height\": %.6f, "
             "\"spread_depth\": %.6f}%s\n",
             i, transport_index, i,
             cfg->obj_metadata_valid, cfg->obj_position_fixed,
+            d->obj_movement[i],
             cfg->obj_azimuth[i], cfg->obj_elevation[i],
             cfg->obj_radius[i], cfg->obj_gain[i],
             cfg->obj_spread_width[i], cfg->obj_spread_height[i],
@@ -152,6 +155,17 @@ IA_ERRORCODE impeghd_rawdump_open(impeghd_rawdump *d, const char *root,
   d->num_channels = raw_clamp_count(cfg->ext_num_channel_signals);
   d->num_objects = raw_clamp_count(cfg->ext_num_objects);
   d->num_hoa = raw_clamp_count(cfg->ext_num_hoa_transport_channels);
+
+  if (cfg->obj_metadata_valid)
+  {
+    d->obj_metadata_seen = 1;
+    for (i = 0; i < d->num_objects; i++)
+    {
+      d->obj_first_azimuth[i] = cfg->obj_azimuth[i];
+      d->obj_first_elevation[i] = cfg->obj_elevation[i];
+      d->obj_first_radius[i] = cfg->obj_radius[i];
+    }
+  }
 
   if (raw_make_dir(root) != 0)
     return -1;
@@ -215,6 +229,41 @@ IA_ERRORCODE impeghd_rawdump_write_transport(impeghd_rawdump *d,
   samples = cfg->pcm_payload_length / (3 * total);
   if (cfg->ext_pcm_frame_samples > 0 && samples > cfg->ext_pcm_frame_samples)
     samples = cfg->ext_pcm_frame_samples;
+
+  if (cfg->obj_metadata_valid && d->num_objects > 0)
+  {
+    WORD32 i;
+    WORD32 manifest_changed = 0;
+
+    if (!d->obj_metadata_seen)
+    {
+      d->obj_metadata_seen = 1;
+      for (i = 0; i < d->num_objects; i++)
+      {
+        d->obj_first_azimuth[i] = cfg->obj_azimuth[i];
+        d->obj_first_elevation[i] = cfg->obj_elevation[i];
+        d->obj_first_radius[i] = cfg->obj_radius[i];
+      }
+      manifest_changed = 1;
+    }
+    else
+    {
+      for (i = 0; i < d->num_objects; i++)
+      {
+        if (!d->obj_movement[i] &&
+            (fabsf(cfg->obj_azimuth[i] - d->obj_first_azimuth[i]) > 0.05f ||
+             fabsf(cfg->obj_elevation[i] - d->obj_first_elevation[i]) > 0.05f ||
+             fabsf(cfg->obj_radius[i] - d->obj_first_radius[i]) > 0.001f))
+        {
+          d->obj_movement[i] = 1;
+          manifest_changed = 1;
+        }
+      }
+    }
+
+    if (manifest_changed)
+      raw_write_manifest(d, cfg);
+  }
 
   {
     WORD32 object_start = cfg->oam_sample_offset;

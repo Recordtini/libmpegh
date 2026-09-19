@@ -24,6 +24,11 @@ typedef struct
   WORD32 num_channels;
   WORD32 num_objects;
   WORD32 num_hoa;
+  WORD32 obj_metadata_seen;
+  WORD32 obj_movement[IMPEGHD_RAWDUMP_MAX_CHANNELS];
+  FLOAT32 obj_first_azimuth[IMPEGHD_RAWDUMP_MAX_CHANNELS];
+  FLOAT32 obj_first_elevation[IMPEGHD_RAWDUMP_MAX_CHANNELS];
+  FLOAT32 obj_first_radius[IMPEGHD_RAWDUMP_MAX_CHANNELS];
   char root[300];
 } impeghd_rawdump;
 

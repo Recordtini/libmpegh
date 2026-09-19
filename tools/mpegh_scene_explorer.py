@@ -209,7 +209,9 @@ class SceneExplorer(tk.Tk):
         for index in range(int(transport.get("objects", 0))):
             path = os.path.join(self.materials_dir, "objects", f"object_{index:02d}.wav")
             meta = object_details.get(index, {})
+            movement = bool(meta.get("movement", 0))
             details = (
+                ("MOVEMENT • " if movement else "") +
                 f"pre-OAM decoded source; transport signal "
                 f"{meta.get('transport_index', index)}; no spatial rendering applied"
             )
