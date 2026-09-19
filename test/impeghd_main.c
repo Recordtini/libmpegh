@@ -36,6 +36,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <direct.h>
+#define IMPEGHD_PATH_SEP "\\"
+#else
+#include <sys/stat.h>
+#define IMPEGHD_PATH_SEP "/"
+#endif
+
 #include <impeghd_type_def.h>
 
 #include "impeghd_memory_standards.h"
@@ -45,6 +53,7 @@
 #include "impeghd_mp4_parser.h"
 #include "impeghd_mp4_file_wrapper.h"
 #include "impeghd_config_params.h"
+#include "impeghd_rawdump.h"
 
 /**
  * @defgroup SampleApp Sample test bench
@@ -173,6 +182,10 @@ FILE *g_pf_ext_ren_ch_md = NULL;
 FILE *g_pf_ext_ren_hoa_md = NULL;
 FILE *g_pf_ext_ren_pcm = NULL;
 WORD8 out_filename[IA_MAX_CMD_LINE_LENGTH] = "";
+WORD32 g_raw_materials = 0;
+WORD8 g_raw_materials_dir[IA_MAX_CMD_LINE_LENGTH] = "";
+static impeghd_rawdump g_rawdump;
+static WORD32 g_rawdump_opened = 0;
 
 #ifdef WAV_HEADER
 /**
@@ -404,6 +417,26 @@ IA_ERRORCODE impeghd_parse_config_param(WORD32 argc, pWORD8 argv[], pVOID ptr_de
         pstr_dec_api->input_config.ptr_ext_ren_pcm_buf = calloc(1024 * 32, 4);
       }
     }
+    if (!strncmp((const char *)argv[i], "-raw_materials:", 15))
+    {
+      pCHAR8 pb_arg_val = (pCHAR8)(argv[i] + 15);
+      g_raw_materials = atoi(pb_arg_val) ? 1 : 0;
+      if (g_raw_materials && !pstr_dec_api->input_config.extrn_rend_flag)
+      {
+        pstr_dec_api->input_config.extrn_rend_flag = 1;
+        pstr_dec_api->input_config.ptr_ext_ren_ch_data_buf = calloc(768, 1);
+        pstr_dec_api->input_config.ptr_ext_ren_oam_data_buf = calloc(768, 1);
+        pstr_dec_api->input_config.ptr_ext_ren_hoa_data_buf = calloc(768, 1);
+        pstr_dec_api->input_config.ptr_ext_ren_pcm_buf = calloc(1024 * 32, 4);
+      }
+    }
+    if (!strncmp((const char *)argv[i], "-rawdir:", 8))
+    {
+      pCHAR8 pb_arg_val = (pCHAR8)(argv[i] + 8);
+      strncpy((char *)g_raw_materials_dir, (const char *)pb_arg_val,
+              IA_MAX_CMD_LINE_LENGTH - 1);
+      g_raw_materials_dir[IA_MAX_CMD_LINE_LENGTH - 1] = '\0';
+    }
     if (!strncmp((const char *)argv[i], "-ibrir:", 7))
     {
       WORD32 brir_sz = 0;
@@ -531,6 +564,9 @@ IA_ERRORCODE impeghd_main_process(WORD32 argc, pWORD8 argv[])
   /* ******************************************************************/
   /* Parse input configuration parameters                             */
   /* ******************************************************************/
+  g_raw_materials = 0;
+  g_raw_materials_dir[0] = '\0';
+  g_rawdump_opened = 0;
   impeghd_parse_config_param(argc, argv, &str_dec_api);
   pstr_out_cfg->malloc_mpegh = &malloc_global;
   pstr_out_cfg->free_mpegh = &free_global;
@@ -610,7 +646,7 @@ IA_ERRORCODE impeghd_main_process(WORD32 argc, pWORD8 argv[])
       err_code_reinit = err_code;
     } while ((!pstr_out_cfg->ui_init_done));
 
-    if (pstr_in_cfg->extrn_rend_flag)
+    if (pstr_in_cfg->extrn_rend_flag && !g_raw_materials)
     {
       WORD8 ext_ren_filename[IA_MAX_CMD_LINE_LENGTH] = "";
 
@@ -750,7 +786,39 @@ IA_ERRORCODE impeghd_main_process(WORD32 argc, pWORD8 argv[])
                         pstr_out_cfg->ch_md_payload_length, g_pf_ext_ren_ch_md);
         }
       }
-      if (g_pf_ext_ren_pcm != NULL)
+      if (g_raw_materials)
+      {
+        if (!g_rawdump_opened && pstr_out_cfg->ext_pcm_num_channels > 0)
+        {
+          WORD8 raw_dir[IA_MAX_CMD_LINE_LENGTH] = "";
+          if (g_raw_materials_dir[0] != '\0')
+          {
+            strncpy((char *)raw_dir, (const char *)g_raw_materials_dir,
+                    IA_MAX_CMD_LINE_LENGTH - 1);
+          }
+          else
+          {
+            strncpy((char *)raw_dir, (const char *)out_filename,
+                    IA_MAX_CMD_LINE_LENGTH - 1);
+            strncat((char *)raw_dir, "_raw_materials",
+                    IA_MAX_CMD_LINE_LENGTH - strlen((const char *)raw_dir) - 1);
+          }
+          raw_dir[IA_MAX_CMD_LINE_LENGTH - 1] = '\0';
+          if (impeghd_rawdump_open(&g_rawdump, (const char *)raw_dir, pstr_out_cfg) != 0)
+          {
+            fprintf(stderr, "\nFailed to create raw-material output folder: %s\n", raw_dir);
+            goto exit_path;
+          }
+          g_rawdump_opened = 1;
+        }
+        if (g_rawdump_opened)
+        {
+          impeghd_rawdump_write_transport(&g_rawdump,
+                                          pstr_in_cfg->ptr_ext_ren_pcm_buf,
+                                          pstr_out_cfg);
+        }
+      }
+      else if (g_pf_ext_ren_pcm != NULL)
       {
         fwrite(pstr_in_cfg->ptr_ext_ren_pcm_buf, 1, pstr_out_cfg->pcm_payload_length,
                g_pf_ext_ren_pcm);
@@ -762,6 +830,11 @@ IA_ERRORCODE impeghd_main_process(WORD32 argc, pWORD8 argv[])
     if (pstr_out_cfg->num_out_bytes > 0)
     {
 #ifndef ARM_PROFILE_HW
+      if (g_rawdump_opened)
+      {
+        impeghd_rawdump_write_rendered(&g_rawdump, (pUWORD8)pb_out_buf,
+                                       pstr_out_cfg->num_out_bytes);
+      }
       fwrite(pb_out_buf, sizeof(WORD8), pstr_out_cfg->num_out_bytes, g_pf_out);
       fflush(g_pf_out);
 #endif
@@ -820,6 +893,11 @@ IA_ERRORCODE impeghd_main_process(WORD32 argc, pWORD8 argv[])
     _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
   }
 exit_path:
+  if (g_rawdump_opened)
+  {
+    impeghd_rawdump_close(&g_rawdump);
+    g_rawdump_opened = 0;
+  }
   err_code = ia_mpegh_dec_delete((pVOID)pstr_out_cfg);
   _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
 
@@ -835,17 +913,12 @@ exit_path:
   {
     free(str_dec_api.input_config.ptr_sd_buf);
   }
-  if (str_dec_api.input_config.extrn_rend_flag && str_dec_api.output_config.ch_data_present)
+  if (str_dec_api.input_config.extrn_rend_flag)
   {
     free(str_dec_api.input_config.ptr_ext_ren_ch_data_buf);
-  }
-  if (str_dec_api.input_config.extrn_rend_flag && str_dec_api.output_config.oam_data_present)
-  {
     free(str_dec_api.input_config.ptr_ext_ren_oam_data_buf);
-  }
-  if (str_dec_api.input_config.extrn_rend_flag && str_dec_api.output_config.hoa_data_present)
-  {
     free(str_dec_api.input_config.ptr_ext_ren_hoa_data_buf);
+    free(str_dec_api.input_config.ptr_ext_ren_pcm_buf);
   }
   if (str_dec_api.input_config.binaural_flag && str_dec_api.input_config.ptr_brir_buf)
   {
@@ -901,6 +974,8 @@ VOID print_usage()
   printf("\n[-ibrir:<brir_file>]");
   printf("\n[-out_fs:<output_samp_freq>]");
   printf("\n[-ext_ren:<extrn_rend_flag>]");
+  printf("\n[-raw_materials:<0|1>]");
+  printf("\n[-rawdir:<output_directory>]");
   printf("\n\nwhere, \n  <inputfile>        is the input MPEGH file name.");
   printf("\n  <outputfile>       is the output file name.");
   printf("\n  <pcmwordsize>      is the bits per sample info.");
@@ -944,6 +1019,89 @@ VOID print_usage()
   printf("\n                     bitstreams in the same location as decoder executable.");
 }
 
+static IA_ERRORCODE impeghd_process_dropped_file(const char *input_path)
+{
+  IA_ERRORCODE err_code;
+  size_t len;
+  char output_dir[IA_MAX_CMD_LINE_LENGTH] = "";
+  char rendered_file[IA_MAX_CMD_LINE_LENGTH] = "";
+  char rawdir_arg[IA_MAX_CMD_LINE_LENGTH + 16] = "";
+  WORD8 raw_arg[] = "-raw_materials:1";
+  WORD8 pcm_arg[] = "-pcmsz:24";
+  pWORD8 process_argv[3];
+  char *last_sep;
+  char *last_sep_alt;
+  char *dot;
+
+  if (input_path == NULL)
+    return -1;
+
+  len = strlen(input_path);
+  if (len + 32 >= IA_MAX_CMD_LINE_LENGTH)
+  {
+    fprintf(stderr, "Path is too long: %s\n", input_path);
+    return -1;
+  }
+
+  strcpy(output_dir, input_path);
+  last_sep = strrchr(output_dir, '\\');
+  last_sep_alt = strrchr(output_dir, '/');
+  if (last_sep_alt != NULL && (last_sep == NULL || last_sep_alt > last_sep))
+    last_sep = last_sep_alt;
+  dot = strrchr(output_dir, '.');
+  if (dot != NULL && (last_sep == NULL || dot > last_sep))
+    *dot = '\0';
+  strcat(output_dir, "_raw_materials");
+
+#ifdef _WIN32
+  _mkdir(output_dir);
+#else
+  mkdir(output_dir, 0777);
+#endif
+
+  snprintf(rendered_file, sizeof(rendered_file), "%s%srendered_mix.wav",
+           output_dir, IMPEGHD_PATH_SEP);
+  snprintf(rawdir_arg, sizeof(rawdir_arg), "-rawdir:%s", output_dir);
+
+  printf("\nExtracting raw MPEG-H materials from:\n  %s\n", input_path);
+  printf("Output folder:\n  %s\n\n", output_dir);
+
+  g_pf_inp = impeghd_mp4_fw_open((pWORD8)input_path);
+  if (g_pf_inp == NULL)
+  {
+    fprintf(stderr, "Could not open input file.\n");
+    return IA_TESTBENCH_MFMAN_FATAL_FILE_OPEN_FAILED;
+  }
+
+  g_pf_out = fopen(rendered_file, "wb");
+  if (g_pf_out == NULL)
+  {
+    impeghd_mp4_fw_close(g_pf_inp);
+    g_pf_inp = NULL;
+    fprintf(stderr, "Could not create output file: %s\n", rendered_file);
+    return IA_TESTBENCH_MFMAN_FATAL_FILE_OPEN_FAILED;
+  }
+
+  g_binaural_flag = 0;
+  process_argv[0] = raw_arg;
+  process_argv[1] = (pWORD8)rawdir_arg;
+  process_argv[2] = pcm_arg;
+  err_code = impeghd_main_process(3, process_argv);
+
+  fclose(g_pf_out);
+  g_pf_out = NULL;
+  impeghd_mp4_fw_close(g_pf_inp);
+  g_pf_inp = NULL;
+
+  if (err_code == IA_MPEGH_DEC_NO_ERROR)
+    printf("\nFinished: %s\n", output_dir);
+  else
+    fprintf(stderr, "\nExtraction returned error 0x%08X for %s\n",
+            (unsigned int)err_code, input_path);
+
+  return err_code;
+}
+
 /**
 *  main
 *
@@ -972,6 +1130,25 @@ IA_ERRORCODE main(WORD32 argc, char *argv[])
   ia_testbench_error_handler_init();
   g_pf_inp = NULL;
   g_pf_out = NULL;
+
+  /* Windows Explorer drag-and-drop (also works as: exe file1.m4a file2.m4a). */
+  if (argc >= 2 && argv[1][0] != '-')
+  {
+    WORD32 input_idx;
+    IA_ERRORCODE final_err = IA_MPEGH_DEC_NO_ERROR;
+    for (input_idx = 1; input_idx < argc; input_idx++)
+    {
+      IA_ERRORCODE one_err = impeghd_process_dropped_file(argv[input_idx]);
+      if (one_err != IA_MPEGH_DEC_NO_ERROR)
+        final_err = one_err;
+    }
+#ifdef _WIN32
+    printf("\nAll requested files processed. Press Enter to close.\n");
+    (VOID)getchar();
+#endif
+    return final_err;
+  }
+
   if (argc < 3)
   {
     if ((argc == 2) && (!strncmp((const char *)argv[1], "-paramfile:", 11)))

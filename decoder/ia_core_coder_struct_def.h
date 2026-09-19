@@ -104,6 +104,12 @@ typedef struct
   WORD32 pcm_data_length;
   WORD32 obj_offset;
   WORD32 hoa_offset;
+  WORD32 ext_pcm_sample_rate;
+  WORD32 ext_pcm_frame_samples;
+  WORD32 ext_pcm_num_channels;
+  WORD32 ext_num_channel_signals;
+  WORD32 ext_num_objects;
+  WORD32 ext_num_hoa_transport_channels;
   WORD8 *ptr_ext_ren_pcm_buf;
 } ia_mpegh_dec_config_struct;
 

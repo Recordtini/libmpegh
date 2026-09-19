@@ -1,0 +1,55 @@
+name: Build Windows Raw Extractor
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - raw-materials-windows
+    paths:
+      - "decoder/**"
+      - "test/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/raw-extractor-windows.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure x64 Release
+        run: cmake -S . -B build-raw -A x64
+
+      - name: Build
+        run: cmake --build build-raw --config Release --target ia_mpeghd_testbench
+
+      - name: Package drag-and-drop extractor
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "build-raw/Release/ia_mpeghd_testbench.exe" "dist/mpegh_raw_extract.exe"
+          @"
+          MPEG-H Raw Materials Extractor
+
+          Drag one or more MPEG-H .m4a/.mp4 files onto mpegh_raw_extract.exe.
+
+          For each input, it creates:
+            <filename>_raw_materials/
+              channels/       decoded channel/bed signals before rendering
+              objects/        decoded object source signals before OAM rendering
+              hoa_transport/  decoded HOA transport channels
+              rendered/       final rendered/downmixed output, one WAV per speaker
+              rendered_mix.wav
+              manifest.json
+
+          You can also run:
+            mpegh_raw_extract.exe "C:\path\file.m4a"
+          "@ | Set-Content -Encoding ASCII "dist/README.txt"
+
+      - name: Upload Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpegh-raw-extractor-windows-x64
+          path: dist/

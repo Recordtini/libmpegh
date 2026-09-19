@@ -873,6 +873,18 @@ IA_ERRORCODE ia_mpegh_dec_init(pVOID p_ia_mpegh_dec_obj, pVOID pv_input, pVOID p
     pstr_output_config->oam_sample_offset = p_obj_mpegh_dec->mpeghd_config.obj_offset;
     pstr_output_config->hoa_sample_offset = p_obj_mpegh_dec->mpeghd_config.hoa_offset;
     pstr_output_config->pcm_bit_depth = 24;
+    pstr_output_config->ext_pcm_sample_rate =
+        p_obj_mpegh_dec->mpeghd_config.ext_pcm_sample_rate;
+    pstr_output_config->ext_pcm_frame_samples =
+        p_obj_mpegh_dec->mpeghd_config.ext_pcm_frame_samples;
+    pstr_output_config->ext_pcm_num_channels =
+        p_obj_mpegh_dec->mpeghd_config.ext_pcm_num_channels;
+    pstr_output_config->ext_num_channel_signals =
+        p_obj_mpegh_dec->mpeghd_config.ext_num_channel_signals;
+    pstr_output_config->ext_num_objects =
+        p_obj_mpegh_dec->mpeghd_config.ext_num_objects;
+    pstr_output_config->ext_num_hoa_transport_channels =
+        p_obj_mpegh_dec->mpeghd_config.ext_num_hoa_transport_channels;
   }
 
   /* Update speaker configuration in output config */
@@ -1108,6 +1120,19 @@ IA_ERRORCODE ia_mpegh_dec_execute(pVOID p_ia_mpegh_dec_obj, pVOID pv_input, pVOI
     pstr_output_config->hoa_md_payload_length =
         p_obj_mpegh_dec->mpeghd_config.hoa_md_payload_length;
     pstr_output_config->pcm_payload_length = p_obj_mpegh_dec->mpeghd_config.pcm_data_length;
+    pstr_output_config->pcm_bit_depth = 24;
+    pstr_output_config->ext_pcm_sample_rate =
+        p_obj_mpegh_dec->mpeghd_config.ext_pcm_sample_rate;
+    pstr_output_config->ext_pcm_frame_samples =
+        p_obj_mpegh_dec->mpeghd_config.ext_pcm_frame_samples;
+    pstr_output_config->ext_pcm_num_channels =
+        p_obj_mpegh_dec->mpeghd_config.ext_pcm_num_channels;
+    pstr_output_config->ext_num_channel_signals =
+        p_obj_mpegh_dec->mpeghd_config.ext_num_channel_signals;
+    pstr_output_config->ext_num_objects =
+        p_obj_mpegh_dec->mpeghd_config.ext_num_objects;
+    pstr_output_config->ext_num_hoa_transport_channels =
+        p_obj_mpegh_dec->mpeghd_config.ext_num_hoa_transport_channels;
   }
   pstr_output_config->i_num_chan = p_obj_mpegh_dec->mpeghd_config.ui_n_channels;
   if (p_obj_mpegh_dec->mpeghd_config.ui_cicp_layout_idx == 0)

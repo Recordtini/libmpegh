@@ -143,6 +143,14 @@ typedef struct
   WORD32 hoa_sample_offset;
   WORD32 oam_sample_offset;
 
+  /* External-render transport PCM description. */
+  WORD32 ext_pcm_sample_rate;
+  WORD32 ext_pcm_frame_samples;
+  WORD32 ext_pcm_num_channels;
+  WORD32 ext_num_channel_signals;
+  WORD32 ext_num_objects;
+  WORD32 ext_num_hoa_transport_channels;
+
   WORD32 num_speakers;
   WORD32 spk_layout;
   WORD32 cicp_index;

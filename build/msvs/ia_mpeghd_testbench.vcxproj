@@ -156,6 +156,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\test\impeghd_error.c" />
     <ClCompile Include="..\..\test\impeghd_main.c" />
+    <ClCompile Include="..\..\test\impeghd_rawdump.c" />
     <ClCompile Include="..\..\test\mp4\impeghd_mp4_file.c" />
     <ClCompile Include="..\..\test\mp4\impeghd_mp4_file_wrapper.c" />
     <ClCompile Include="..\..\test\mp4\impeghd_mp4_init.c" />

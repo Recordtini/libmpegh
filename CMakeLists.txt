@@ -122,6 +122,7 @@ add_library (
 add_executable (ia_mpeghd_testbench
 	test/impeghd_error.c  
 	test/impeghd_main.c
+	test/impeghd_rawdump.c
 	test/mp4/impeghd_mp4_file.c  
 	test/mp4/impeghd_mp4_file_wrapper.c  
 	test/mp4/impeghd_mp4_init.c  

@@ -2077,6 +2077,13 @@ IA_ERRORCODE ia_core_coder_dec_ext_ele_proc(VOID *temp_handle, WORD32 *num_chann
     WORD8 *ptr_ext_ren_pcm = (WORD8 *)handle->mpeghd_config.ptr_ext_ren_pcm_buf;
     WORD32 num_cc_channels = ia_signals_3da->num_ch + ia_signals_3da->num_audio_obj +
                              ia_signals_3da->num_hoa_transport_ch;
+    handle->mpeghd_config.ext_pcm_sample_rate = pstr_usac_config->usac_sampling_frequency;
+    handle->mpeghd_config.ext_pcm_frame_samples = pstr_dec_data->str_usac_data.ccfl;
+    handle->mpeghd_config.ext_pcm_num_channels = num_cc_channels;
+    handle->mpeghd_config.ext_num_channel_signals = ia_signals_3da->num_ch;
+    handle->mpeghd_config.ext_num_objects = ia_signals_3da->num_audio_obj;
+    handle->mpeghd_config.ext_num_hoa_transport_channels =
+        ia_signals_3da->num_hoa_transport_ch;
     for (s = 0; s < pstr_dec_data->str_usac_data.ccfl; s++)
     {
       for (channel = 0; channel < num_cc_channels; channel++)
@@ -2092,7 +2099,8 @@ IA_ERRORCODE ia_core_coder_dec_ext_ele_proc(VOID *temp_handle, WORD32 *num_chann
     }
     handle->mpeghd_config.obj_offset = 0;
     handle->mpeghd_config.hoa_offset = 0;
-    handle->mpeghd_config.pcm_data_length = 3 * AUDIO_CODEC_FRAME_SIZE_MAX * num_cc_channels;
+    handle->mpeghd_config.pcm_data_length =
+        3 * pstr_dec_data->str_usac_data.ccfl * num_cc_channels;
   }
 
   if (pstr_dec_data->str_frame_data.str_audio_specific_config.str_mae_asi.asi_present)
