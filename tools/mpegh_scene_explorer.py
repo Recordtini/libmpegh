@@ -9,7 +9,7 @@ import wave
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-APP_TITLE = "MPEG-H Scene Explorer"
+APP_TITLE = "MPEG-H Raw Object Explorer"
 
 
 def app_dir():
@@ -68,14 +68,19 @@ class SceneExplorer(tk.Tk):
         self.file_label = ttk.Label(top, text="Drop a file on this EXE or choose Open.")
         self.file_label.pack(side="left", padx=12, fill="x", expand=True)
 
-        scene = ttk.LabelFrame(self, text="Scene", padding=10)
+        scene = ttk.LabelFrame(self, text="Raw decoded MPEG-H sources", padding=10)
         scene.pack(fill="x", padx=12, pady=(0, 8))
         self.summary_label = ttk.Label(scene, text="No file loaded.")
         self.summary_label.pack(anchor="w")
+        ttk.Label(
+            scene,
+            text="Raw Object Sources are decoded before OAM positioning/rendering. Spatial metadata does not alter these WAVs.",
+            foreground="#666666",
+        ).pack(anchor="w", pady=(4, 0))
 
         controls = ttk.Frame(self, padding=(12, 0))
         controls.pack(fill="x")
-        ttk.Button(controls, text="Objects only", command=self.select_objects).pack(side="left")
+        ttk.Button(controls, text="Select raw objects", command=self.select_objects).pack(side="left")
         ttk.Button(controls, text="Select all", command=lambda: self.set_all(True)).pack(side="left", padx=(6, 0))
         ttk.Button(controls, text="Select none", command=lambda: self.set_all(False)).pack(side="left", padx=(6, 0))
         ttk.Button(controls, text="Preview selected", command=self.preview_selected).pack(side="left", padx=(18, 0))
@@ -88,7 +93,7 @@ class SceneExplorer(tk.Tk):
         self.tree.heading("type", text="Type")
         self.tree.heading("name", text="Signal")
         self.tree.heading("duration", text="Length")
-        self.tree.heading("details", text="Metadata / position")
+        self.tree.heading("details", text="Source / notes")
         self.tree.column("pick", width=60, anchor="center", stretch=False)
         self.tree.column("type", width=120, stretch=False)
         self.tree.column("name", width=150, stretch=False)
@@ -204,29 +209,13 @@ class SceneExplorer(tk.Tk):
         for index in range(int(transport.get("objects", 0))):
             path = os.path.join(self.materials_dir, "objects", f"object_{index:02d}.wav")
             meta = object_details.get(index, {})
-            if meta.get("metadata_valid"):
-                mode = "fixed position" if meta.get("position_fixed") else "position metadata present"
-                details = (
-                    f"{mode}; az {float(meta.get('azimuth', 0)):.1f}°, "
-                    f"el {float(meta.get('elevation', 0)):.1f}°, "
-                    f"r {float(meta.get('radius', 0)):.2f}, "
-                    f"gain {float(meta.get('gain', 0)):.2f}"
-                )
-                spread = max(
-                    abs(float(meta.get("spread_width", 0))),
-                    abs(float(meta.get("spread_height", 0))),
-                    abs(float(meta.get("spread_depth", 0))),
-                )
-                if spread > 0.001:
-                    details += f"; spread {spread:.2f}"
-            else:
-                details = (
-                    f"transport signal {meta.get('transport_index', index)}; "
-                    "OAM metadata unavailable"
-                )
+            details = (
+                f"pre-OAM decoded source; transport signal "
+                f"{meta.get('transport_index', index)}; no spatial rendering applied"
+            )
             longest = max(
                 longest,
-                self.add_row("Object", f"Object {index:02d}", path, details, True),
+                self.add_row("Raw object", f"Object {index:02d}", path, details, True),
             )
 
         for index in range(int(transport.get("channel_signals", 0))):
@@ -296,7 +285,7 @@ class SceneExplorer(tk.Tk):
             )
         )
         self.status.config(
-            text="Analysis complete. Raw object signals are selected by default."
+            text="Analysis complete. Raw pre-OAM object sources are selected by default."
         )
         self.export_btn.config(state="normal")
 
@@ -321,7 +310,7 @@ class SceneExplorer(tk.Tk):
 
     def select_objects(self):
         for iid, row in self.rows.items():
-            checked = row["kind"] == "Object"
+            checked = row["kind"] == "Raw object"
             row["checked"] = checked
             values = list(self.tree.item(iid, "values"))
             values[0] = "[x]" if checked else "[ ]"
@@ -355,7 +344,7 @@ class SceneExplorer(tk.Tk):
         os.makedirs(destination, exist_ok=True)
 
         kind_dirs = {
-            "Object": "objects",
+            "Raw object": "objects",
             "Channel bed": "channels",
             "HOA transport": "hoa_transport",
             "Rendered": "rendered",
